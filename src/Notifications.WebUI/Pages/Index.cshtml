@@ -1,0 +1,93 @@
+﻿@page
+@using Microsoft.AspNetCore.Mvc.TagHelpers
+@using Notifications.WebUI.Services
+@model Notifications.WebUI.Pages.IndexModel
+@inject INotificationService NotificationService
+
+<h1>Notificações</h1>
+
+<table class="table">
+    <thead>
+        <tr>
+            <th>Id</th>
+            <th>Message</th>
+            <th>Status</th>
+            <th>Created At</th>
+            <th>Sent At</th>
+        </tr>
+    </thead>
+    <tbody id="notificationsTableBody">
+        @foreach (var notification in Model.Notifications)
+        {
+            <tr id="notification-@notification.Id">
+                <td>@notification.Id</td>
+                <td>@notification.Message</td>
+                <td>@notification.Status</td>
+                <td>@notification.CreatedAt</td>
+                <td>@notification.SentAt</td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+<h2>Enviar Notificação</h2>
+
+<form id="notificationForm" method="post">
+    <div class="form-group">
+        <label for="Message">Message</label>
+        <input type="text" class="form-control" id="Message" name="Message" required />
+    </div>
+    <button type="submit" class="btn btn-primary">Enviar</button>
+</form>
+
+@section Scripts {
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/5.0.11/signalr.min.js"></script>
+    <script type="text/javascript">
+        const connection = new signalR.HubConnectionBuilder()
+            .withUrl("https://localhost:5053/notificationHub")
+            .withUrl("https://localhost:5053/notificationHub")
+            .build();
+
+        connection.on("ReceiveNotification", function (notification) {
+            console.log("Received notification:", notification);
+            const tableBody = document.getElementById("notificationsTableBody");
+            let row = document.getElementById(`notification-${notification.id}`);
+            if (row) {
+                row.cells[2].innerText = notification.status;
+                row.cells[4].innerText = notification.sentAt ? new Date(notification.sentAt).toLocaleString() : '';
+            } else {
+                row = tableBody.insertRow(0);
+                row.id = `notification-${notification.id}`;
+                row.insertCell(0).innerText = notification.id;
+                row.insertCell(1).innerText = notification.message;
+                row.insertCell(2).innerText = notification.status;
+                row.insertCell(3).innerText = new Date(notification.createdAt).toLocaleString();
+                row.insertCell(4).innerText = notification.sentAt ? new Date(notification.sentAt).toLocaleString() : '';
+            }
+        });
+
+        connection.start()
+            .then(function () {
+                console.log("SignalR connected.");
+                document.getElementById("notificationForm").addEventListener("submit", function (event) {
+                    event.preventDefault();
+                    const message = document.getElementById("Message").value;
+                    const notificationEvent = {
+                        message: message,
+                        status: "Pending",
+                        createdAt: new Date().toISOString(),
+                        sentAt: null
+                    };
+                    connection.invoke("SendNotificationToClient", connection.connectionId, notificationEvent)
+                        .then(() => {
+                            console.log("Notification sent.");
+                        })
+                        .catch(err => console.error("Error sending notification:", err));
+                });
+            })
+            .catch(function (err) {
+                console.error("SignalR connection error:", err.toString());
+            });
+
+    </script>
+}
